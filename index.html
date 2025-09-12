@@ -1,177 +1,226 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Spending Dashboard</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@400;600;700&display=swap"
+          rel="stylesheet">
+
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
+
+    <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
     <!-- DataTables -->
     <link rel="stylesheet" href="https://cdn.datatables.net/v/bs5/dt-2.0.8/datatables.min.css"/>
+
     <!-- Custom -->
     <link href="styles.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
-    <div class="container-fluid">
-        <span class="navbar-brand fw-bold"><i class="bi bi-credit-card-2-front me-2"></i>Spending Dashboard</span>
-        <div class="d-flex gap-2 ms-auto">
-            <label class="btn btn-outline-light btn-sm mb-0">
-                <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload CSV
+<!-- BACKGROUND -->
+<div class="bg-grid"></div>
+<div class="bg-gradient"></div>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark glass-nav sticky-top">
+    <div class="container-xxl">
+      <span class="navbar-brand d-flex align-items-center gap-2">
+        <span class="brand-mark d-inline-flex align-items-center justify-content-center"><i
+                class="bi bi-credit-card-2-front"></i></span>
+        <span class="fw-extrabold">Spending Dashboard</span>
+      </span>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+            <label class="btn btn-light btn-upload mb-0">
+                <i class="bi bi-upload me-2"></i> Upload CSV
                 <input id="fileInput" type="file" accept=".csv" hidden>
             </label>
         </div>
     </div>
 </nav>
 
-<main class="container my-4">
-    <!-- Filters -->
-    <div class="card shadow-sm mb-3">
-        <div class="card-body">
-            <div class="row g-3 align-items-end">
+<header class="hero container-xxl py-5">
+    <div class="row align-items-center g-4">
+        <div class="col-12 col-lg-7">
+            <h1 class="display-5 fw-extrabold lh-1 mb-3">
+                Track. Understand. <span class="grad-text">Optimize</span>.
+            </h1>
+            <p class="lead text-secondary-emphasis mb-4">
+                A high-fidelity, modern analytics surface for your credit card transactions — built with Bootstrap,
+                Chart.js, and DataTables.
+            </p>
+
+            <div class="row g-3">
                 <div class="col-12 col-md-3">
-                    <label class="form-label mb-1">From</label>
-                    <input type="date" id="fromDate" class="form-control">
+                    <label class="form-label">From</label>
+                    <input type="date" id="fromDate" class="form-control form-control-elevated" placeholder="Start">
                 </div>
                 <div class="col-12 col-md-3">
-                    <label class="form-label mb-1">To</label>
-                    <input type="date" id="toDate" class="form-control">
+                    <label class="form-label">To</label>
+                    <input type="date" id="toDate" class="form-control form-control-elevated" placeholder="End">
                 </div>
                 <div class="col-12 col-md-3">
-                    <label class="form-label mb-1">Category</label>
-                    <select id="categoryFilter" class="form-select">
+                    <label class="form-label">Category</label>
+                    <select id="categoryFilter" class="form-select form-control-elevated">
                         <option value="">All</option>
                     </select>
                 </div>
                 <div class="col-12 col-md-3">
-                    <label class="form-label mb-1">Merchant</label>
-                    <select id="merchantFilter" class="form-select">
+                    <label class="form-label">Merchant</label>
+                    <select id="merchantFilter" class="form-select form-control-elevated">
                         <option value="">All</option>
                     </select>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="glass-panel kpi-callout">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="glow-orb"></div>
+                    <div>
+                        <div class="text-uppercase small text-secondary">Live Metrics</div>
+                        <div class="fs-5">Auto-updating as you filter</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</header>
 
-    <!-- KPIs -->
-    <div class="row g-3 mb-3">
-        <div class="col-12 col-md-3">
-            <div class="card kpi shadow-sm">
-                <div class="card-body">
-                    <div class="kpi-label">Total Spend</div>
+<main class="container-xxl pb-5">
+
+    <!-- KPI CARDS -->
+    <section class="mb-4">
+        <div class="row g-3" id="kpiRow">
+            <div class="col-12 col-md-3">
+                <div class="glass-kpi h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="kpi-title"><i class="bi bi-cash-coin me-2"></i>Total Spend</span>
+                        <span class="kpi-sub">in range</span>
+                    </div>
                     <div class="kpi-value" id="kpiTotal">$0</div>
-                    <div class="kpi-sub">in selected range</div>
                 </div>
             </div>
-        </div>
-        <div class="col-12 col-md-3">
-            <div class="card kpi shadow-sm">
-                <div class="card-body">
-                    <div class="kpi-label">Transactions</div>
+            <div class="col-12 col-md-3">
+                <div class="glass-kpi h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="kpi-title"><i class="bi bi-list-check me-2"></i>Transactions</span>
+                        <span class="kpi-sub">rows</span>
+                    </div>
                     <div class="kpi-value" id="kpiCount">0</div>
-                    <div class="kpi-sub">unique rows</div>
                 </div>
             </div>
-        </div>
-        <div class="col-12 col-md-3">
-            <div class="card kpi shadow-sm">
-                <div class="card-body">
-                    <div class="kpi-label">Avg Transaction</div>
+            <div class="col-12 col-md-3">
+                <div class="glass-kpi h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="kpi-title"><i class="bi bi-activity me-2"></i>Avg Transaction</span>
+                        <span class="kpi-sub">mean</span>
+                    </div>
                     <div class="kpi-value" id="kpiAvg">$0</div>
                 </div>
             </div>
-        </div>
-        <div class="col-12 col-md-3">
-            <div class="card kpi shadow-sm">
-                <div class="card-body">
-                    <div class="kpi-label">Top Merchant</div>
-                    <div class="kpi-value small" id="kpiTopMerchant">—</div>
-                    <div class="kpi-sub" id="kpiTopMerchantSpend"></div>
+            <div class="col-12 col-md-3">
+                <div class="glass-kpi h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="kpi-title"><i class="bi bi-award me-2"></i>Top Merchant</span>
+                        <span class="kpi-sub" id="kpiTopMerchantSpend"></span>
+                    </div>
+                    <div class="kpi-value small truncate-1" id="kpiTopMerchant">—</div>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Charts -->
-    <div class="row g-3 mb-3">
-        <div class="col-12 col-lg-6">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-light fw-semibold">
-                    <i class="bi bi-graph-up me-2"></i>Spend Over Time
-                </div>
-                <div class="card-body">
-                    <canvas id="timeChart" height="180"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-lg-6">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-light fw-semibold">
-                    <i class="bi bi-pie-chart me-2"></i>Spend by Category
-                </div>
-                <div class="card-body">
-                    <canvas id="categoryChart" class="category-canvas" height="320"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-light fw-semibold d-flex align-items-center justify-content-between">
-                    <span><i class="bi bi-bar-chart-steps me-2"></i>Top Merchants</span>
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-                                id="topNMerchantsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            Show 10
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="topNMerchantsDropdown">
-                            <li><a class="dropdown-item merchant-count" data-value="10">10</a></li>
-                            <li><a class="dropdown-item merchant-count" data-value="20">20</a></li>
-                            <li><a class="dropdown-item merchant-count" data-value="50">50</a></li>
-                        </ul>
+    <!-- CHARTS -->
+    <section class="mb-4">
+        <div class="row g-3">
+            <div class="col-12 col-xl-6">
+                <div class="glass-panel h-100">
+                    <div class="panel-header">
+                        <span><i class="bi bi-graph-up-arrow me-2"></i>Spend Over Time</span>
+                    </div>
+                    <div class="panel-body">
+                        <canvas id="timeChart" height="220"></canvas>
                     </div>
                 </div>
-                <div class="card-body">
-                    <canvas id="merchantChart" height="160"></canvas>
+            </div>
+            <div class="col-12 col-xl-6">
+                <div class="glass-panel h-100">
+                    <div class="panel-header">
+                        <span><i class="bi bi-pie-chart me-2"></i>Spend by Category</span>
+                    </div>
+                    <div class="panel-body">
+                        <canvas id="categoryChart" height="260"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Table -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-semibold"><i class="bi bi-table me-2"></i>Transactions</div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="txTable" class="table table-striped table-hover w-100">
-                    <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Category</th>
-                        <th class="text-end">Amount</th>
-                    </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+    <!-- TOP MERCHANTS -->
+    <section class="mb-4">
+        <div class="glass-panel">
+            <div class="panel-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <span><i class="bi bi-bar-chart-steps me-2"></i>Top Merchants</span>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-pill" type="button"
+                            id="topNMerchantsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        Show 10
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end rounded-4 shadow-xxl">
+                        <li><a class="dropdown-item merchant-count" data-value="10">10</a></li>
+                        <li><a class="dropdown-item merchant-count" data-value="20">20</a></li>
+                        <li><a class="dropdown-item merchant-count" data-value="50">50</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="panel-body">
+                <canvas id="merchantChart" height="180"></canvas>
             </div>
         </div>
-    </div>
+    </section>
+
+    <!-- TABLE -->
+    <section class="mb-5">
+        <div class="glass-panel">
+            <div class="panel-header"><i class="bi bi-table me-2"></i>Transactions</div>
+            <div class="panel-body">
+                <div class="table-responsive nicer-scroll">
+                    <table id="txTable" class="table table-borderless align-middle table-hover w-100">
+                        <thead>
+                        <tr class="text-secondary small">
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
 </main>
 
-<footer class="text-center text-muted small py-4">Built with Bootstrap · Chart.js · DataTables</footer>
+<footer class="container-xxl py-4">
+    <div class="d-flex align-items-center justify-content-between text-secondary small">
+        <span>Built with <span class="text-white-50">Bootstrap</span> · <span
+                class="text-white-50">Chart.js</span> · <span class="text-white-50">DataTables</span></span>
+        <span class="badge rounded-pill text-bg-dark subtle-glow">vNext UI</span>
+    </div>
+</footer>
 
-<!-- Dependencies -->
+<!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/v/bs5/dt-2.0.8/datatables.min.js"></script>
-<!-- App -->
 <script src="app.js"></script>
 </body>
 </html>
