@@ -1,0 +1,44 @@
+/* Aesthetic polish */
+body {
+    background: #f7f7fb;
+}
+
+.navbar .btn {
+    border-radius: 999px;
+}
+
+.card.kpi {
+    border: 0;
+    background: linear-gradient(180deg, #ffffff, #f2f4f8);
+}
+
+.kpi .kpi-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.kpi .kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.kpi .kpi-sub {
+    font-size: 0.8rem;
+    color: #8b8d92;
+}
+
+.card-header {
+    border-bottom: 0;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+}
+
+/* Force larger pie chart */
+.category-canvas {
+    height: 320px !important;
+    max-height: 360px;
+}
