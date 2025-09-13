@@ -13,29 +13,34 @@ const CONFIG = {
     flipSigns: false,
     absAmounts: true,
     categoryPie: {minShare: 0.05, maxSlices: 8, otherLabel: "Other"},
-    bucketRules: [
-        {label: "Groceries", pattern: /(grocery|grocer|supermarket|whole\s*foods|trader\s*joe|market\b(?!place))/i},
-        {
-            label: "Restaurants",
-            pattern: /(restaurant|bar|cafe|coffee|fast\s*food|diner|pizza|wings|chicken|starbucks|chipotle|grubhub|ubereats|ubere?)/i
-        },
-        {
-            label: "Shopping/Retail",
-            pattern: /(retail|shopping|store|department|target|walmart|wal-?mart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i
-        },
-        {label: "Subscriptions", pattern: /(subscription|spotify|netflix|prime\b|membership|service\s*fee)/i},
-        {
-            label: "Transport/Fuel",
-            pattern: /(fuel|gas|petrol|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i
-        },
-        {label: "Travel", pattern: /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i},
-        {label: "Health/Pharmacy", pattern: /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i},
-        {label: "Entertainment", pattern: /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i},
-        {label: "Education", pattern: /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i},
-        {label: "Services", pattern: /(services?\b|barber|repair|vip\b|business\s*services)/i},
-        {label: "Utilities", pattern: /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i},
-        {label: "Other", pattern: /.*/i},
-    ],
+    bucketRules: [{
+        label: "Groceries",
+        pattern: /(grocery|grocer|supermarket|whole\s*foods|trader\s*joe|market\b(?!place))/i
+    }, {
+        label: "Restaurants",
+        pattern: /(restaurant|bar|cafe|coffee|fast\s*food|diner|pizza|wings|chicken|starbucks|chipotle|grubhub|ubereats|ubere?)/i
+    }, {
+        label: "Shopping/Retail",
+        pattern: /(retail|shopping|store|department|target|walmart|wal-?mart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i
+    }, {label: "Subscriptions", pattern: /(subscription|spotify|netflix|prime\b|membership|service\s*fee)/i}, {
+        label: "Transport/Fuel",
+        pattern: /(fuel|gas|petrol|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i
+    }, {
+        label: "Travel",
+        pattern: /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i
+    }, {
+        label: "Health/Pharmacy",
+        pattern: /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i
+    }, {
+        label: "Entertainment",
+        pattern: /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i
+    }, {
+        label: "Education",
+        pattern: /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i
+    }, {label: "Services", pattern: /(services?\b|barber|repair|vip\b|business\s*services)/i}, {
+        label: "Utilities",
+        pattern: /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i
+    }, {label: "Other", pattern: /.*/i},],
 };
 // ==========================
 
@@ -55,21 +60,17 @@ const fmtCurrency = (n) => n.toLocaleString(undefined, {style: "currency", curre
 
 const parseDate = (v) => {
     if (!v) return null;
-    const cands = [
-        () => new Date(v),
-        () => {
-            const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(v).trim());
-            if (!m) return null;
-            const [_, mm, dd, yy] = m;
-            return new Date(yy.length === 2 ? "20" + yy : yy, mm - 1, dd);
-        },
-        () => {
-            const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v).trim());
-            if (!m) return null;
-            const [_, yyyy, mm, dd] = m;
-            return new Date(yyyy, mm - 1, dd);
-        },
-    ];
+    const cands = [() => new Date(v), () => {
+        const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(v).trim());
+        if (!m) return null;
+        const [_, mm, dd, yy] = m;
+        return new Date(yy.length === 2 ? "20" + yy : yy, mm - 1, dd);
+    }, () => {
+        const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v).trim());
+        if (!m) return null;
+        const [_, yyyy, mm, dd] = m;
+        return new Date(yyyy, mm - 1, dd);
+    },];
     for (const f of cands) {
         const d = f();
         if (d && !isNaN(d)) return d;
@@ -100,43 +101,7 @@ function cleanDescription(desc) {
     s = s.replace(/\*/g, " ").replace(/[?]+/g, "").replace(/’/g, "'").replace(/\s{2,}/g, " ").trim();
 
     // canonical brands
-    const mapRules = [
-        [/amazon\s*marke?t?place.*?/i, "Amazon"],
-        [/amazon\.?com/i, "Amazon"],
-        [/amzn\s*mkp/i, "Amazon"],
-        [/amzn\b/i, "Amazon"],
-        [/wal-?mart/i, "Walmart"],
-        [/\bh&m\b/i, "H&M"],
-        [/uniqlo/i, "Uniqlo"],
-        [/shein[\s\.]*\.?com/i, "SHEIN"],
-        [/shein\b/i, "SHEIN"],
-        [/cvs\/?pharmacy/i, "CVS"],
-        [/cvs\s*pharmacy/i, "CVS"],
-        [/walgreens/i, "Walgreens"],
-        [/starbucks/i, "Starbucks"],
-        [/chipotle/i, "Chipotle"],
-        [/grubhub/i, "Grubhub"],
-        [/uber\s*(?:eats)?/i, "Uber"],
-        [/lyft/i, "Lyft"],
-        [/shell/i, "Shell"],
-        [/exxon(?:mobil)?/i, "ExxonMobil"],
-        [/nouria/i, "Nouria"],
-        [/whole\s*foods/i, "Whole Foods"],
-        [/trader\s*joe'?s/i, "Trader Joe's"],
-        [/sweet\s*green|sweetgreen/i, "Sweetgreen"],
-        [/openai/i, "OpenAI"],
-        [/pressed\s*cafe/i, "Pressed Cafe"],
-        [/wings\s*over/i, "Wings Over"],
-        [/lime\b/i, "Lime"],
-        [/domino'?s/i, "Domino's"],
-        [/ted'?s/i, "Ted's"],
-        [/da\s*andrea/i, "Da Andrea"],
-        [/mumbai\s*spice/i, "Mumbai Spice"],
-        [/sichuan\s*gourmet/i, "Sichuan Gourmet"],
-        [/vip\s*barber/i, "VIP Barber Shop"],
-        [/mcgraw\s*hill/i, "McGraw Hill"],
-        [/the\s*skin\s*alchem/i, "The Skin Alchemist"],
-    ];
+    const mapRules = [[/amazon\s*marke?t?place.*?/i, "Amazon"], [/amazon\.?com/i, "Amazon"], [/amzn\s*mkp/i, "Amazon"], [/amzn\b/i, "Amazon"], [/wal-?mart/i, "Walmart"], [/\bh&m\b/i, "H&M"], [/uniqlo/i, "Uniqlo"], [/shein[\s\.]*\.?com/i, "SHEIN"], [/shein\b/i, "SHEIN"], [/cvs\/?pharmacy/i, "CVS"], [/cvs\s*pharmacy/i, "CVS"], [/walgreens/i, "Walgreens"], [/starbucks/i, "Starbucks"], [/chipotle/i, "Chipotle"], [/grubhub/i, "Grubhub"], [/uber\s*(?:eats)?/i, "Uber"], [/lyft/i, "Lyft"], [/shell/i, "Shell"], [/exxon(?:mobil)?/i, "ExxonMobil"], [/nouria/i, "Nouria"], [/whole\s*foods/i, "Whole Foods"], [/trader\s*joe'?s/i, "Trader Joe's"], [/sweet\s*green|sweetgreen/i, "Sweetgreen"], [/openai/i, "OpenAI"], [/pressed\s*cafe/i, "Pressed Cafe"], [/wings\s*over/i, "Wings Over"], [/lime\b/i, "Lime"], [/domino'?s/i, "Domino's"], [/ted'?s/i, "Ted's"], [/da\s*andrea/i, "Da Andrea"], [/mumbai\s*spice/i, "Mumbai Spice"], [/sichuan\s*gourmet/i, "Sichuan Gourmet"], [/vip\s*barber/i, "VIP Barber Shop"], [/mcgraw\s*hill/i, "McGraw Hill"], [/the\s*skin\s*alchem/i, "The Skin Alchemist"],];
     for (const [pat, to] of mapRules) s = s.replace(pat, to);
 
     // titlecase then restore brand caps
@@ -296,9 +261,7 @@ function renderCharts(rows) {
     });
 
     charts.category = new Chart($("#categoryChart"), {
-        type: "doughnut",
-        data: {labels: cat.labels, datasets: [{label: "Spend", data: cat.data}]},
-        options: {
+        type: "doughnut", data: {labels: cat.labels, datasets: [{label: "Spend", data: cat.data}]}, options: {
             maintainAspectRatio: false,
             cutout: "55%",
             plugins: {legend: {position: "bottom"}},
@@ -332,10 +295,8 @@ function renderCharts(rows) {
     });
 
     charts.merchant = new Chart($("#merchantChart"), {
-        type: "bar",
-        data: {
-            labels: mer.labels,
-            datasets: [{
+        type: "bar", data: {
+            labels: mer.labels, datasets: [{
                 label: "Spend",
                 data: mer.data,
                 barThickness: 22,
@@ -343,8 +304,7 @@ function renderCharts(rows) {
                 categoryPercentage: 0.8,
                 barPercentage: 0.9
             }]
-        },
-        options: {
+        }, options: {
             indexAxis: "y",
             maintainAspectRatio: false,
             scales: {x: {ticks: {callback: (v) => fmtCurrency(v)}}},
@@ -466,8 +426,7 @@ function hydrateUI(rows) {
 // File handling
 function handleCSVFile(file) {
     Papa.parse(file, {
-        header: true, skipEmptyLines: "greedy",
-        complete: (res) => {
+        header: true, skipEmptyLines: "greedy", complete: (res) => {
             if (!res || !res.data || !res.data.length) {
                 alert("No rows found in the CSV.");
                 return;
@@ -479,8 +438,7 @@ function handleCSVFile(file) {
                 return;
             }
             hydrateUI(cleaned);
-        },
-        error: (err) => alert("Failed to parse CSV: " + err.message),
+        }, error: (err) => alert("Failed to parse CSV: " + err.message),
     });
 }
 
