@@ -73,53 +73,20 @@ function parseDate(v) {
 }
 
 // Conservative name cleaning
+// --- Minimal merchant name cleaning (only letters, title case) ---
 function cleanDescription(desc) {
-    if (!desc) return "(No Description)";
-    const original = String(desc);
-    let s = original.replace(/\s+/g, " ").replace(/[’]/g, "'").trim();
-    s = s.replace(/^(apple\s*pay|google\s*pay|aplpay|aplp?ay|venmo|paypal|pp|square|sq|bt|tst|olo|py)\s*[:\-*]?\s*/i, "");
-    s = s.replace(/\b(?:\d{3}[-\s]*){2}\d{4}\b/g, "").trim();
-    const map = [
-        [/\bamazon\.?com\/bill\s*wa\b/i, "Amazon.com/Bill WA"],
-        [/\bamazon\s*marketplace\b/i, "Amazon Marketplace"],
-        [/\bamazon\b/i, "Amazon"],
-        [/\bwalmart\b/i, "Walmart"], [/\bh&m\b/i, "H&M"], [/\buniqlo\b/i, "Uniqlo"],
-        [/\bshein(\.com)?\b/i, "SHEIN"],
-        [/\bcvs\b/i, "CVS"], [/\bwalgreens\b/i, "Walgreens"],
-        [/\bstarbucks\b/i, "Starbucks"], [/\bchipotle\b/i, "Chipotle"],
-        [/\buber\b/i, "Uber"], [/\blyft\b/i, "Lyft"],
-        [/\bshell\b/i, "Shell"], [/\bexxonmobil\b/i, "ExxonMobil"], [/\bnouria\b/i, "Nouria"],
-        [/\bpressed\s*cafe\b/i, "Pressed Cafe"], [/\bwings\s*over\b/i, "Wings Over"],
-        [/\bdomino'?s\b/i, "Domino's"], [/\bted'?s\b/i, "Ted's"],
-        [/\bda\s*andrea\b/i, "Da Andrea"], [/\bmumbai\s*spice\b/i, "Mumbai Spice"],
-        [/\bsichuan\s*gourmet\b/i, "Sichuan Gourmet"],
-        [/\bvip\s*barber\b/i, "VIP Barber Shop"],
-        [/\bmcgraw\s*hill\b/i, "McGraw Hill"],
-        [/\bthe\s*skin\s*alch[a-z]*\b/i, "The Skin Alchemist"],
-        [/\bhollister\b/i, "Hollister"],
-        [/\btarget\b/i, "Target"],
-        [/\bopenai\b/i, "OpenAI"]
-    ];
-    for (const [pat, to] of map) s = s.replace(pat, to);
-    s = s.split(/\s+/).map(w => /^[A-Z0-9]{2,}$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-    return s.replace(/\s{2,}/g, " ").trim();
+    if (desc == null) return "(No Description)";
+    // Normalize unicode, then replace non-letters with spaces
+    let s = String(desc).normalize("NFKC").replace(/[^A-Za-z]+/g, " ").trim();
+    if (!s) return "(No Description)";
+    // Title Case each word
+    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
+
 
 function bucketizeCategory(raw) {
     const s = String(raw || "").toLowerCase();
-    const rules = [
-        ["Groceries", /(grocery|grocer|supermarket|market\b(?!place))/i],
-        ["Restaurants", /(restaurant|bar|cafe|coffee|pizza|wings|chicken|chipotle|grubhub|ubereats|ubere?)/i],
-        ["Shopping/Retail", /(retail|shopping|store|department|target|walmart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i],
-        ["Subscriptions", /(subscription|spotify|netflix|prime|membership|service\s*fee)/i],
-        ["Transport/Fuel", /(fuel|gas|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i],
-        ["Travel", /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i],
-        ["Health/Pharmacy", /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i],
-        ["Entertainment", /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i],
-        ["Education", /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i],
-        ["Services", /(services?\b|barber|repair|vip\b|business\s*services)/i],
-        ["Utilities", /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i],
-    ];
+    const rules = [["Groceries", /(grocery|grocer|supermarket|market\b(?!place))/i], ["Restaurants", /(restaurant|bar|cafe|coffee|pizza|wings|chicken|chipotle|grubhub|ubereats|ubere?)/i], ["Shopping/Retail", /(retail|shopping|store|department|target|walmart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i], ["Subscriptions", /(subscription|spotify|netflix|prime|membership|service\s*fee)/i], ["Transport/Fuel", /(fuel|gas|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i], ["Travel", /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i], ["Health/Pharmacy", /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i], ["Entertainment", /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i], ["Education", /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i], ["Services", /(services?\b|barber|repair|vip\b|business\s*services)/i], ["Utilities", /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i],];
     for (const [label, pat] of rules) if (pat.test(s)) return label;
     return "Other";
 }
@@ -377,16 +344,20 @@ function renderCharts(rows) {
     Chart.defaults.maintainAspectRatio = false;
 
     charts.time = new Chart($("#timeChart"), {
-        type: "line",
-        data: {
+        type: "line", data: {
             labels: t.labels, datasets: [{
                 label: t.mode === "monthly" ? "Monthly Spend" : (t.mode === "weekly" ? "Weekly Spend" : "Daily Spend"),
-                data: t.data, tension: 0.35, fill: true,
-                borderColor: getCategoryColor("Restaurants"), backgroundColor: "rgba(34,216,245,.18)"
+                data: t.data,
+                tension: 0.35,
+                fill: true,
+                borderColor: getCategoryColor("Restaurants"),
+                backgroundColor: "rgba(34,216,245,.18)"
             }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+        }, options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            resizeDelay: 0,
             interaction: {mode: 'nearest', intersect: false},
             scales: {y: {ticks: {callback: (v) => fmtCurrency(v)}}},
             plugins: {legend: {display: false}},
@@ -416,17 +387,15 @@ function renderCharts(rows) {
     });
 
     charts.category = new Chart($("#categoryChart"), {
-        type: "doughnut",
-        data: {
-            labels: cat.labels,
-            datasets: [{
-                label: "Spend",
-                data: cat.data,
-                backgroundColor: cat.labels.map(l => getCategoryColor(l))
+        type: "doughnut", data: {
+            labels: cat.labels, datasets: [{
+                label: "Spend", data: cat.data, backgroundColor: cat.labels.map(l => getCategoryColor(l))
             }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+        }, options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            resizeDelay: 0,
             interaction: {mode: 'nearest', intersect: true},
             cutout: "68%",
             plugins: {legend: {position: "bottom"}},
@@ -449,10 +418,8 @@ function renderCharts(rows) {
     });
 
     charts.merchant = new Chart($("#merchantChart"), {
-        type: "bar",
-        data: {
-            labels: mer.labels,
-            datasets: [{
+        type: "bar", data: {
+            labels: mer.labels, datasets: [{
                 label: "Spend",
                 data: mer.data,
                 backgroundColor: mer.colors,
@@ -461,10 +428,12 @@ function renderCharts(rows) {
                 categoryPercentage: 0.8,
                 barPercentage: 0.9
             }]
-        },
-        options: {
+        }, options: {
             indexAxis: "y",
-            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            resizeDelay: 0,
             interaction: {mode: 'nearest', intersect: true},
             scales: {x: {ticks: {callback: (v) => fmtCurrency(v)}}},
             plugins: {legend: {display: false}},
@@ -498,8 +467,13 @@ function renderTable(rows) {
     </tr>
   `).join("");
     TABLE = new DataTable('#txTable', {
-        paging: true, pageLength: 25, lengthMenu: [25, 50, 100],
-        order: [[3, 'desc']], searching: true, info: true, responsive: true
+        paging: true,
+        pageLength: 25,
+        lengthMenu: [25, 50, 100],
+        order: [[3, 'desc']],
+        searching: true,
+        info: true,
+        responsive: true
     });
     [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].forEach(el => new bootstrap.Tooltip(el));
 }
@@ -665,8 +639,7 @@ function hydrateUI(rows) {
 
 function handleCSVFile(file) {
     Papa.parse(file, {
-        header: true, skipEmptyLines: "greedy",
-        complete: (res) => {
+        header: true, skipEmptyLines: "greedy", complete: (res) => {
             if (!res || !res.data || !res.data.length) {
                 alert("No rows found in the CSV.");
                 return;
@@ -678,8 +651,7 @@ function handleCSVFile(file) {
                 return;
             }
             hydrateUI(cleaned);
-        },
-        error: (err) => alert("Failed to parse CSV: " + err.message),
+        }, error: (err) => alert("Failed to parse CSV: " + err.message),
     });
 }
 
