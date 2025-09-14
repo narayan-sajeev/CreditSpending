@@ -73,14 +73,27 @@ function parseDate(v) {
 }
 
 // Conservative name cleaning
-// --- Minimal merchant name cleaning (only letters, title case) ---
+// --- Minimal merchant name cleaning (letters only, title case, strip Apple Pay) ---
 function cleanDescription(desc) {
     if (desc == null) return "(No Description)";
-    // Normalize unicode, then replace non-letters with spaces
-    let s = String(desc).normalize("NFKC").replace(/[^A-Za-z]+/g, " ").trim();
+    let s = String(desc).normalize("NFKC");
+
+    // Remove Apple Pay tokens and variants like "Aplpay"
+    s = s.replace(/\b(aplpay|apple\s*pay)\b/gi, " ");
+
+    // Replace all non-letters with spaces
+    s = s.replace(/[^A-Za-z]+/g, " ");
+
+    // Collapse whitespace
+    s = s.replace(/\s+/g, " ").trim();
+
     if (!s) return "(No Description)";
-    // Title Case each word
-    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
+    // Title Case
+    return s
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
 }
 
 
