@@ -161,10 +161,11 @@
 
     <section class="mb-4">
         <div class="glass-panel">
-            <div class="panel-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <small class="text-secondary" id="hdrMerFilter"></small>
+            <div class="panel-header d-flex align-items-center flex-wrap gap-2">
                 <span><i class="bi bi-bar-chart-steps me-2"></i>Top Merchants</span>
-                <div class="dropdown">
+
+                <!-- dropdown stays to the left of the right-aligned filter text -->
+                <div class="dropdown ms-auto me-2">
                     <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-pill" type="button"
                             id="topNMerchantsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                         Show 10
@@ -175,7 +176,11 @@
                         <li><a class="dropdown-item merchant-count" data-value="50">50</a></li>
                     </ul>
                 </div>
+
+                <!-- filter label is hard-aligned to the right edge -->
+                <small class="text-secondary ms-auto me-0 text-end" id="hdrMerFilter"></small>
             </div>
+
             <div class="panel-body">
                 <canvas id="merchantChart" height="180"></canvas>
                 <div class="small text-secondary mt-2">Tip: Click a bar to filter by merchant. Click again to clear.
