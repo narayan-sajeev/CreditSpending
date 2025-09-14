@@ -1,132 +1,167 @@
-/* Spending Dashboard (stable build with robust click-to-toggle)
- * - Robust merchant name cleaning
- * - Bucketized categories
- * - Adaptive time bucketing (daily <=45 days, else monthly)
- * - Click-to-filter on pie (category) and bar (merchant) with TOGGLE behavior
- * - Preserve current filters when changing Top-N merchants
- */
-
-// ======= CSV LAYOUT =======
+/* === Spending Dashboard (clean build) === */
+// Config
 const CONFIG = {
     columns: {date: "Date", desc: "Description", amount: "Amount", category: "Category"},
     ignoreRows: 0,
     flipSigns: false,
-    absAmounts: true,
+    absAmounts: false,
     categoryPie: {minShare: 0.05, maxSlices: 8, otherLabel: "Other"},
-    bucketRules: [{
-        label: "Groceries",
-        pattern: /(grocery|grocer|supermarket|whole\s*foods|trader\s*joe|market\b(?!place))/i
-    }, {
-        label: "Restaurants",
-        pattern: /(restaurant|bar|cafe|coffee|fast\s*food|diner|pizza|wings|chicken|starbucks|chipotle|grubhub|ubereats|ubere?)/i
-    }, {
-        label: "Shopping/Retail",
-        pattern: /(retail|shopping|store|department|target|walmart|wal-?mart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i
-    }, {label: "Subscriptions", pattern: /(subscription|spotify|netflix|prime\b|membership|service\s*fee)/i}, {
-        label: "Transport/Fuel",
-        pattern: /(fuel|gas|petrol|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i
-    }, {
-        label: "Travel",
-        pattern: /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i
-    }, {
-        label: "Health/Pharmacy",
-        pattern: /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i
-    }, {
-        label: "Entertainment",
-        pattern: /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i
-    }, {
-        label: "Education",
-        pattern: /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i
-    }, {label: "Services", pattern: /(services?\b|barber|repair|vip\b|business\s*services)/i}, {
-        label: "Utilities",
-        pattern: /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i
-    }, {label: "Other", pattern: /.*/i},],
 };
-// ==========================
+
+// Stable category colors (cool spectrum) + fallback; merchants use dominant bucket color
+const CATEGORY_COLORS = {
+    "Restaurants": "#6B4EFF",
+    "Shopping/Retail": "#00CCAE",
+    "Transport/Fuel": "#F59E0B",
+    "Entertainment": "#EF4444",
+    "Groceries": "#10B981",
+    "Utilities": "#3B82F6",
+    "Education": "#22D3EE",
+    "Services": "#A78BFA",
+    "Health/Pharmacy": "#8B5CF6",
+    "Travel": "#F43F5E",
+    "Subscriptions": "#F97316",
+    "Other": "#94A3B8"
+};
+const __FALLBACK_COOL = ["#6B4EFF", "#5F7AFF", "#4E8FFF", "#3BA6FF", "#22B7F5", "#0BC2BE", "#00CCAE", "#17B7CE", "#2F9EEF", "#5076FF", "#23ABDF", "#00B7FF"];
+
+function __hash(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+        h = (h << 5) - h + str.charCodeAt(i);
+        h |= 0;
+    }
+    return Math.abs(h);
+}
+
+function getCategoryColor(label) {
+    const key = String(label || "Other");
+    if (CATEGORY_COLORS[key]) return CATEGORY_COLORS[key];
+    const idx = __hash(key) % __FALLBACK_COOL.length;
+    return __FALLBACK_COOL[idx];
+}
+
+// Helpers
+const $ = (sel) => document.querySelector(sel);
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+const fmtCurrency = (n) => n.toLocaleString(undefined, {style: "currency", currency: "USD", maximumFractionDigits: 2});
+
+function parseDate(v) {
+    if (!v) return null;
+    const c1 = () => new Date(v);
+    const c2 = () => {
+        const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(v).trim());
+        if (!m) return null;
+        const [_, mm, dd, yy] = m;
+        return new Date(yy.length === 2 ? "20" + yy : yy, mm - 1, dd);
+    };
+    const c3 = () => {
+        const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v).trim());
+        if (!m) return null;
+        const [_, yyyy, mm, dd] = m;
+        return new Date(yyyy, mm - 1, dd);
+    };
+    for (const f of [c1, c2, c3]) {
+        const d = f();
+        if (d && !isNaN(d)) return d;
+    }
+    return null;
+}
+
+// Conservative name cleaning
+function cleanDescription(desc) {
+    if (!desc) return "(No Description)";
+    const original = String(desc);
+    let s = original.replace(/\s+/g, " ").replace(/[’]/g, "'").trim();
+    s = s.replace(/^(apple\s*pay|google\s*pay|aplpay|aplp?ay|venmo|paypal|pp|square|sq|bt|tst|olo|py)\s*[:\-*]?\s*/i, "");
+    s = s.replace(/\b(?:\d{3}[-\s]*){2}\d{4}\b/g, "").trim();
+    const map = [
+        [/\bamazon\.?com\/bill\s*wa\b/i, "Amazon.com/Bill WA"],
+        [/\bamazon\s*marketplace\b/i, "Amazon Marketplace"],
+        [/\bamazon\b/i, "Amazon"],
+        [/\bwalmart\b/i, "Walmart"], [/\bh&m\b/i, "H&M"], [/\buniqlo\b/i, "Uniqlo"],
+        [/\bshein(\.com)?\b/i, "SHEIN"],
+        [/\bcvs\b/i, "CVS"], [/\bwalgreens\b/i, "Walgreens"],
+        [/\bstarbucks\b/i, "Starbucks"], [/\bchipotle\b/i, "Chipotle"],
+        [/\buber\b/i, "Uber"], [/\blyft\b/i, "Lyft"],
+        [/\bshell\b/i, "Shell"], [/\bexxonmobil\b/i, "ExxonMobil"], [/\bnouria\b/i, "Nouria"],
+        [/\bpressed\s*cafe\b/i, "Pressed Cafe"], [/\bwings\s*over\b/i, "Wings Over"],
+        [/\bdomino'?s\b/i, "Domino's"], [/\bted'?s\b/i, "Ted's"],
+        [/\bda\s*andrea\b/i, "Da Andrea"], [/\bmumbai\s*spice\b/i, "Mumbai Spice"],
+        [/\bsichuan\s*gourmet\b/i, "Sichuan Gourmet"],
+        [/\bvip\s*barber\b/i, "VIP Barber Shop"],
+        [/\bmcgraw\s*hill\b/i, "McGraw Hill"],
+        [/\bthe\s*skin\s*alch[a-z]*\b/i, "The Skin Alchemist"],
+        [/\bhollister\b/i, "Hollister"],
+        [/\btarget\b/i, "Target"],
+        [/\bopenai\b/i, "OpenAI"]
+    ];
+    for (const [pat, to] of map) s = s.replace(pat, to);
+    s = s.split(/\s+/).map(w => /^[A-Z0-9]{2,}$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    return s.replace(/\s{2,}/g, " ").trim();
+}
+
+function bucketizeCategory(raw) {
+    const s = String(raw || "").toLowerCase();
+    const rules = [
+        ["Groceries", /(grocery|grocer|supermarket|market\b(?!place))/i],
+        ["Restaurants", /(restaurant|bar|cafe|coffee|pizza|wings|chicken|chipotle|grubhub|ubereats|ubere?)/i],
+        ["Shopping/Retail", /(retail|shopping|store|department|target|walmart|shein|uniqlo|\bh&m\b|clothing|fashion|apparel|jewelry|fragrance|marketplace|internet\s*purchase|online|amazon)/i],
+        ["Subscriptions", /(subscription|spotify|netflix|prime|membership|service\s*fee)/i],
+        ["Transport/Fuel", /(fuel|gas|shell|exxon|exxonmobil|citgo|transport|taxi|rideshare|lyft|uber|metro|train|amtrak|nouria)/i],
+        ["Travel", /(hotel|lodging|airline|flight|delta|southwest|jetblue|booking|airbnb|travel)/i],
+        ["Health/Pharmacy", /(pharmacy|cvs|walgreens|health|clinic|medical|drugstore)/i],
+        ["Entertainment", /(entertainment|cinema|movie|concert|event|gametime|lime|theatre|theater)/i],
+        ["Education", /(education|school|tuition|course|books?|mcgraw|wall\s*street\s*prep)/i],
+        ["Services", /(services?\b|barber|repair|vip\b|business\s*services)/i],
+        ["Utilities", /(utility|electric|water|internet\s*bill|phone\s*bill|mobile\s*bill)/i],
+    ];
+    for (const [label, pat] of rules) if (pat.test(s)) return label;
+    return "Other";
+}
 
 // State
 let ROWS = [];
 let TABLE = null;
 let charts = {time: null, category: null, merchant: null};
 let TOP_N = 10;
-
-// Tracked filters (kept in sync with dropdowns)
 let CURRENT_BUCKET_FILTER = "";
 let CURRENT_MERCHANT_FILTER = "";
+let __FILTER_APPLYING = false;
 
-// Helpers
-const $ = (sel) => document.querySelector(sel);
-const fmtCurrency = (n) => n.toLocaleString(undefined, {style: "currency", currency: "USD", maximumFractionDigits: 2});
+// Data shaping
 
-const parseDate = (v) => {
-    if (!v) return null;
-    const cands = [() => new Date(v), () => {
-        const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(v).trim());
-        if (!m) return null;
-        const [_, mm, dd, yy] = m;
-        return new Date(yy.length === 2 ? "20" + yy : yy, mm - 1, dd);
-    }, () => {
-        const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(v).trim());
-        if (!m) return null;
-        const [_, yyyy, mm, dd] = m;
-        return new Date(yyyy, mm - 1, dd);
-    },];
-    for (const f of cands) {
-        const d = f();
-        if (d && !isNaN(d)) return d;
+// ---- Refund-aware shaping ----
+// Returns an object with:
+//   rowsForGraphs: rows excluding negatives and charge/refund pairs that cancel exactly by amount
+//   rowsForKPIs:   all rows (positives and negatives) for totals/avg
+function splitRefundAware(rows) {
+    const negMap = new Map(); // absAmount -> count
+    for (const r of rows) {
+        if (r.amount <= 0) continue;
+        if (r.amount < 0) {
+            const a = Math.abs(r.amount).toFixed(2);
+            negMap.set(a, (negMap.get(a) || 0) + 1);
+        }
     }
-    return null;
-};
-
-// Merchant/Description Cleaner
-function cleanDescription(desc) {
-    if (!desc) return "(No Description)";
-    let s = String(desc);
-
-    // whitespace
-    s = s.replace(/\s+/g, " ").trim();
-
-    // payment/aggregator prefixes
-    s = s.replace(/^(?:apple\s*pay|aplpay|aplp?ay|google\s*pay|venmo|paypal|pp\*|square\*|bt\*|tst\*|olo\*|sq\*)\s*/i, "");
-
-    // drop trailing city/state
-    s = s.replace(/\s+[-,]?\s*[A-Za-z .&'()]+,\s*[A-Z]{2}\s*$/i, "");
-    s = s.replace(/\s+[-,]?\s*[A-Za-z .&'()]+\s+[A-Z]{2}\s*$/i, "");
-
-    // strip store/address numbers & code-like tails
-    s = s.replace(/\s+(?:#|No\.?)?\s*\d{2,5}\s*$/i, "");
-    s = s.replace(/\s+[A-Za-z]*\d{3,}[A-Za-z]*\s*$/i, "");
-
-    // unify punctuation
-    s = s.replace(/\*/g, " ").replace(/[?]+/g, "").replace(/’/g, "'").replace(/\s{2,}/g, " ").trim();
-
-    // canonical brands
-    const mapRules = [[/amazon\s*marke?t?place.*?/i, "Amazon"], [/amazon\.?com/i, "Amazon"], [/amzn\s*mkp/i, "Amazon"], [/amzn\b/i, "Amazon"], [/wal-?mart/i, "Walmart"], [/\bh&m\b/i, "H&M"], [/uniqlo/i, "Uniqlo"], [/shein[\s\.]*\.?com/i, "SHEIN"], [/shein\b/i, "SHEIN"], [/cvs\/?pharmacy/i, "CVS"], [/cvs\s*pharmacy/i, "CVS"], [/walgreens/i, "Walgreens"], [/starbucks/i, "Starbucks"], [/chipotle/i, "Chipotle"], [/grubhub/i, "Grubhub"], [/uber\s*(?:eats)?/i, "Uber"], [/lyft/i, "Lyft"], [/shell/i, "Shell"], [/exxon(?:mobil)?/i, "ExxonMobil"], [/nouria/i, "Nouria"], [/whole\s*foods/i, "Whole Foods"], [/trader\s*joe'?s/i, "Trader Joe's"], [/sweet\s*green|sweetgreen/i, "Sweetgreen"], [/openai/i, "OpenAI"], [/pressed\s*cafe/i, "Pressed Cafe"], [/wings\s*over/i, "Wings Over"], [/lime\b/i, "Lime"], [/domino'?s/i, "Domino's"], [/ted'?s/i, "Ted's"], [/da\s*andrea/i, "Da Andrea"], [/mumbai\s*spice/i, "Mumbai Spice"], [/sichuan\s*gourmet/i, "Sichuan Gourmet"], [/vip\s*barber/i, "VIP Barber Shop"], [/mcgraw\s*hill/i, "McGraw Hill"], [/the\s*skin\s*alchem/i, "The Skin Alchemist"],];
-    for (const [pat, to] of mapRules) s = s.replace(pat, to);
-
-    // titlecase then restore brand caps
-    const preserve = new Set(["CVS", "Uber", "Lyft", "Shell", "ExxonMobil", "Whole Foods", "Trader Joe's", "Uniqlo", "Sweetgreen", "OpenAI", "Amazon", "Starbucks", "Chipotle", "Grubhub", "Target", "SHEIN", "Walmart", "H&M", "VIP Barber Shop", "McGraw Hill", "The Skin Alchemist", "Pressed Cafe", "Wings Over", "Lime", "Domino's", "Ted's", "Da Andrea", "Mumbai Spice", "Sichuan Gourmet"]);
-    s = s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-    for (const brand of preserve) {
-        const re = new RegExp("\\b" + brand.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&") + "\\b", "gi");
-        s = s.replace(re, brand);
+    const rowsForGraphs = [];
+    for (const r of rows) {
+        if (r.amount < 0) continue; // never graph negatives
+        const a = Math.abs(r.amount).toFixed(2);
+        const n = negMap.get(a) || 0;
+        if (n > 0) {
+            negMap.set(a, n - 1);
+            continue;
+        } // drop matched charge
+        rowsForGraphs.push(r);
     }
-
-    // collapse duplicated words
-    s = s.replace(/\b(\w+)(\s+\1\b)+/gi, "$1").trim();
-
-    if (s.length <= 1 || /^the$/i.test(s)) s = String(desc).replace(/\*/g, " ").replace(/\s+/g, " ").trim();
-    return s || "(No Description)";
+    return {rowsForGraphs, rowsForKPIs: rows};
 }
 
-// Bucketizer
-function bucketizeCategory(raw) {
-    const s = String(raw || "").toLowerCase();
-    for (const rule of CONFIG.bucketRules) if (rule.pattern.test(s)) return rule.label;
-    return "Other";
-}
-
-// Normalize
 function normalizeRows(rawRows) {
     const map = CONFIG.columns;
     const out = [];
@@ -141,58 +176,89 @@ function normalizeRows(rawRows) {
         const rawCat = (map.category ? (r[map.category] ?? "").toString().trim() : "") || "(Uncategorized)";
         if (!d || isNaN(amt)) continue;
         const desc = cleanDescription(descRaw);
-        out.push({date: d, description: desc, amount: amt, rawCategory: rawCat, bucket: bucketizeCategory(rawCat)});
+        out.push({
+            date: d,
+            description: desc,
+            rawDescription: descRaw,
+            amount: amt,
+            rawCategory: rawCat,
+            bucket: bucketizeCategory(rawCat)
+        });
     }
     out.sort((a, b) => a.date - b.date);
     return out;
 }
 
-// KPIs
-function setKPIs(rows) {
-    const total = rows.reduce((a, r) => a + r.amount, 0);
-    const avg = rows.length ? total / rows.length : 0;
-    const byM = {};
-    for (const r of rows) byM[r.description] = (byM[r.description] || 0) + r.amount;
-    const top = Object.entries(byM).sort((a, b) => b[1] - a[1])[0];
-    $("#kpiTotal").textContent = fmtCurrency(total);
-    $("#kpiCount").textContent = String(rows.length);
-    $("#kpiAvg").textContent = fmtCurrency(avg);
-    $("#kpiTopMerchant").textContent = top ? top[0] : "—";
-    $("#kpiTopMerchantSpend").textContent = top ? fmtCurrency(top[1]) : "";
-}
-
-// Time series (adaptive)
 function buildTimeSeries(rows) {
-    if (!rows.length) return {labels: [], data: []};
+    if (!rows.length) return {labels: [], data: [], mode: "none"};
     const minD = rows[0].date;
     const maxD = rows[rows.length - 1].date;
     const spanDays = Math.max(1, Math.round((maxD - minD) / (1000 * 60 * 60 * 24)));
-    if (spanDays <= 45) {
+    if (spanDays <= 60) {
         const byDay = new Map();
         for (const r of rows) {
+            if (r.amount <= 0) continue;
             const k = r.date.toISOString().slice(0, 10);
             byDay.set(k, (byDay.get(k) || 0) + r.amount);
         }
-        const labels = Array.from(byDay.keys()).sort();
-        const data = labels.map(k => byDay.get(k));
-        return {labels, data};
+        const labels = [], data = [];
+        const d = new Date(minD);
+        while (d <= maxD) {
+            const k = d.toISOString().slice(0, 10);
+            labels.push(k);
+            data.push(byDay.get(k) || 0);
+            d.setDate(d.getDate() + 1);
+        }
+        return {labels, data, mode: "daily"};
+    } else if (spanDays <= 180) {
+        const start = new Date(minD);
+        start.setHours(0, 0, 0, 0);
+        const day = (start.getDay() + 6) % 7;
+        start.setDate(start.getDate() - day);
+        const end = new Date(maxD);
+        end.setHours(0, 0, 0, 0);
+        const byWeek = new Map();
+        for (const r of rows) {
+            const d = new Date(r.date);
+            d.setHours(0, 0, 0, 0);
+            const off = (d.getDay() + 6) % 7;
+            d.setDate(d.getDate() - off);
+            const k = d.toISOString().slice(0, 10);
+            byWeek.set(k, (byWeek.get(k) || 0) + r.amount);
+        }
+        const labels = [], data = [];
+        const w = new Date(start);
+        while (w <= end) {
+            const k = w.toISOString().slice(0, 10);
+            labels.push(k);
+            data.push(byWeek.get(k) || 0);
+            w.setDate(w.getDate() + 7);
+        }
+        return {labels, data, mode: "weekly"};
     } else {
         const byMonth = new Map();
         for (const r of rows) {
             const k = `${r.date.getFullYear()}-${String(r.date.getMonth() + 1).padStart(2, "0")}`;
             byMonth.set(k, (byMonth.get(k) || 0) + r.amount);
         }
-        const labels = Array.from(byMonth.keys()).sort();
-        const data = labels.map(k => byMonth.get(k));
-        return {labels, data};
+        const labels = [], data = [];
+        const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+        const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
+        while (cur <= end) {
+            const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+            labels.push(k);
+            data.push(byMonth.get(k) || 0);
+            cur.setMonth(cur.getMonth() + 1);
+        }
+        return {labels, data, mode: "monthly"};
     }
 }
 
-// Category + Merchant builders
 function buildCategoryData(rows) {
     const byCat = new Map();
     let total = 0;
     for (const r of rows) {
+        if (r.amount <= 0) continue;
         const k = r.bucket;
         byCat.set(k, (byCat.get(k) || 0) + r.amount);
         total += r.amount;
@@ -223,17 +289,50 @@ function buildCategoryData(rows) {
 
 function buildMerchantData(rows, topN) {
     const byM = new Map();
-    for (const r of rows) byM.set(r.description, (byM.get(r.description) || 0) + r.amount);
+    const byMBuckets = new Map();
+    for (const r of rows) {
+        byM.set(r.description, (byM.get(r.description) || 0) + r.amount);
+        const bmap = byMBuckets.get(r.description) || {};
+        bmap[r.bucket] = (bmap[r.bucket] || 0) + r.amount;
+        byMBuckets.set(r.description, bmap);
+    }
     const sorted = Array.from(byM.entries()).sort((a, b) => b[1] - a[1]).slice(0, topN);
-    return {labels: sorted.map(x => x[0]), data: sorted.map(x => x[1])};
+    const labels = sorted.map(x => x[0]);
+    const data = sorted.map(x => x[1]);
+    const colors = labels.map(m => {
+        const bmap = byMBuckets.get(m) || {};
+        const topBucket = Object.entries(bmap).sort((a, b) => b[1] - a[1])[0]?.[0] || "Other";
+        return getCategoryColor(topBucket);
+    });
+    return {labels, data, colors};
 }
 
-// Chart helpers
+// KPIs
+function setKPIs(rows) {
+    const total = rows.reduce((a, r) => a + r.amount, 0);
+    const avg = rows.length ? rows.reduce((a, r) => a + Math.abs(r.amount), 0) / rows.length : 0;
+    const byM = {};
+    for (const r of rows) byM[r.description] = (byM[r.description] || 0) + r.amount;
+    const top = Object.entries(byM).sort((a, b) => b[1] - a[1])[0];
+    $("#kpiTotal").textContent = fmtCurrency(total);
+    $("#kpiCount").textContent = String(rows.length);
+    $("#kpiAvg").textContent = fmtCurrency(avg);
+    $("#kpiTopMerchant").textContent = top ? top[0] : "—";
+    $("#kpiTopMerchantSpend").textContent = top ? fmtCurrency(top[1]) : "";
+}
+
+// Charts
+let __MERCHANT_CANVAS_H = -1;
+
 function adjustMerchantChartHeight(n) {
-    const base = 120, per = 28, maxH = 1200, minH = 160;
-    const h = Math.max(minH, Math.min(maxH, Math.round(base + per * n)));
+    const MIN = 220, PER = 22, MAX = 520;
+    const target = Math.max(MIN, Math.min(MAX, Math.round(MIN + PER * Math.max(0, n - 5))));
     const cv = document.getElementById("merchantChart");
-    if (cv) cv.style.height = h + "px";
+    if (!cv) return;
+    if (__MERCHANT_CANVAS_H === target) return;
+    __MERCHANT_CANVAS_H = target;
+    cv.height = target;
+    cv.style.height = target + "px";
 }
 
 function renderCharts(rows) {
@@ -246,86 +345,140 @@ function renderCharts(rows) {
     if (!rows.length) return;
 
     const t = buildTimeSeries(rows);
-    const cat = buildCategoryData(rows);
+    let cat = buildCategoryData(rows);
     const mer = buildMerchantData(rows, TOP_N);
     adjustMerchantChartHeight(mer.labels.length);
 
+    const timeCanvas = $("#timeChart");
+    const catCanvas = $("#categoryChart");
+    if (timeCanvas) {
+        window.__TIME_CANVAS_H = window.__TIME_CANVAS_H ?? -1;
+        if (__TIME_CANVAS_H !== 90) {
+            timeCanvas.height = 90;
+            timeCanvas.style.height = "90px";
+            __TIME_CANVAS_H = 210;
+        }
+    }
+    if (catCanvas) {
+        window.__CAT_CANVAS_H = window.__CAT_CANVAS_H ?? -1;
+        if (__CAT_CANVAS_H !== 100) {
+            catCanvas.height = 100;
+            catCanvas.style.height = "100px";
+            __CAT_CANVAS_H = 240;
+        }
+    }
+
+    if (!cat.labels.length) cat = {labels: ["None"], data: [0], total: 0};
+
+    Chart.defaults.animation = false;
+    Chart.defaults.transitions = Chart.defaults.transitions || {};
+    Chart.defaults.transitions.active = {animation: {duration: 0}};
+    Chart.defaults.resizeDelay = 0;
+    Chart.defaults.maintainAspectRatio = false;
+
     charts.time = new Chart($("#timeChart"), {
         type: "line",
-        data: {labels: t.labels, datasets: [{label: "Monthly Spend", data: t.data, tension: 0.35, fill: true}]},
-        options: {
-            maintainAspectRatio: false,
-            scales: {y: {ticks: {callback: (v) => fmtCurrency(v)}}},
-            plugins: {legend: {display: false}}
+        data: {
+            labels: t.labels, datasets: [{
+                label: t.mode === "monthly" ? "Monthly Spend" : (t.mode === "weekly" ? "Weekly Spend" : "Daily Spend"),
+                data: t.data, tension: 0.35, fill: true,
+                borderColor: getCategoryColor("Restaurants"), backgroundColor: "rgba(34,216,245,.18)"
+            }]
         },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+            interaction: {mode: 'nearest', intersect: false},
+            scales: {y: {ticks: {callback: (v) => fmtCurrency(v)}}},
+            plugins: {legend: {display: false}},
+            onClick: (evt) => {
+                const points = charts.time.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
+                if (!points || !points.length) return;
+                const idx = points[0].index;
+                const label = charts.time.data.labels[idx];
+                if (t.mode === "monthly") {
+                    const parts = String(label).split("-");
+                    const yyyy = parseInt(parts[0], 10);
+                    const mm = parseInt(parts[1], 10);
+                    const from = new Date(yyyy, mm - 1, 1);
+                    const to = new Date(yyyy, mm, 0);
+                    $("#fromDate").value = from.toISOString().slice(0, 10);
+                    $("#toDate").value = to.toISOString().slice(0, 10);
+                } else {
+                    if (ROWS.length) {
+                        const min = ROWS[0].date, max = ROWS[ROWS.length - 1].date;
+                        $("#fromDate").value = min.toISOString().slice(0, 10);
+                        $("#toDate").value = max.toISOString().slice(0, 10);
+                    }
+                }
+                safeApplyFilters();
+            }
+        }
     });
 
     charts.category = new Chart($("#categoryChart"), {
-        type: "doughnut", data: {labels: cat.labels, datasets: [{label: "Spend", data: cat.data}]}, options: {
-            maintainAspectRatio: false,
-            cutout: "55%",
+        type: "doughnut",
+        data: {
+            labels: cat.labels,
+            datasets: [{
+                label: "Spend",
+                data: cat.data,
+                backgroundColor: cat.labels.map(l => getCategoryColor(l))
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+            interaction: {mode: 'nearest', intersect: true},
+            cutout: "68%",
             plugins: {legend: {position: "bottom"}},
             onClick: (evt, activeEls) => {
                 if (!activeEls || !activeEls.length) return;
                 const idx = activeEls[0].index;
-                const clicked = String(charts.category.data.labels[idx] ?? "").trim();
-                const other = CONFIG.categoryPie.otherLabel;
-                const sel = document.getElementById("categoryFilter");
-                if (!sel) return;
-                // Toggle logic against tracked state (case-insensitive)
-                const cur = String(CURRENT_BUCKET_FILTER || "").trim();
-                if (clicked === other) {
-                    if (cur !== "") {
-                        CURRENT_BUCKET_FILTER = "";
-                        sel.value = "";
-                        applyFilters();
-                    }
-                    return;
-                }
-                if (clicked.toLowerCase() === cur.toLowerCase()) {
-                    CURRENT_BUCKET_FILTER = "";
-                    sel.value = ""; // clear
+                const clicked = String(charts.category.data.labels[idx] || "").trim();
+                const other = String(CONFIG.categoryPie.otherLabel).toLowerCase();
+                const catSel = document.getElementById("categoryFilter");
+                if (!catSel) return;
+                if (String(clicked).toLowerCase() === other) {
+                    CURRENT_BUCKET_FILTER = (catSel.value === CONFIG.categoryPie.otherLabel) ? "" : CONFIG.categoryPie.otherLabel;
                 } else {
-                    CURRENT_BUCKET_FILTER = clicked;
-                    sel.value = clicked;
+                    CURRENT_BUCKET_FILTER = (catSel.value === clicked) ? "" : clicked;
                 }
-                applyFilters();
+                catSel.value = CURRENT_BUCKET_FILTER;
+                safeApplyFilters();
             }
-        },
+        }
     });
 
     charts.merchant = new Chart($("#merchantChart"), {
-        type: "bar", data: {
-            labels: mer.labels, datasets: [{
+        type: "bar",
+        data: {
+            labels: mer.labels,
+            datasets: [{
                 label: "Spend",
                 data: mer.data,
-                barThickness: 22,
-                maxBarThickness: 30,
+                backgroundColor: mer.colors,
+                barThickness: 24,
+                maxBarThickness: 32,
                 categoryPercentage: 0.8,
                 barPercentage: 0.9
             }]
-        }, options: {
+        },
+        options: {
             indexAxis: "y",
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false, animation: false, resizeDelay: 0,
+            interaction: {mode: 'nearest', intersect: true},
             scales: {x: {ticks: {callback: (v) => fmtCurrency(v)}}},
             plugins: {legend: {display: false}},
             onClick: (evt, activeEls) => {
                 if (!activeEls || !activeEls.length) return;
                 const idx = activeEls[0].index;
-                const clicked = String(charts.merchant.data.labels[idx] ?? "").trim();
-                const sel = document.getElementById("merchantFilter");
-                if (!sel) return;
-                const cur = String(CURRENT_MERCHANT_FILTER || "").trim();
-                if (clicked.toLowerCase() === cur.toLowerCase()) {
-                    CURRENT_MERCHANT_FILTER = "";
-                    sel.value = "";
-                } else {
-                    CURRENT_MERCHANT_FILTER = clicked;
-                    sel.value = clicked;
-                }
-                applyFilters();
+                const clicked = String(charts.merchant.data.labels[idx] || "").trim();
+                const merchSel = document.getElementById("merchantFilter");
+                if (!merchSel) return;
+                CURRENT_MERCHANT_FILTER = (merchSel.value === clicked) ? "" : clicked;
+                merchSel.value = CURRENT_MERCHANT_FILTER;
+                safeApplyFilters();
             }
-        },
+        }
     });
 }
 
@@ -339,29 +492,24 @@ function renderTable(rows) {
     tbody.innerHTML = rows.map(r => `
     <tr>
       <td>${r.date.toISOString().slice(0, 10)}</td>
-      <td>${r.description}</td>
+      <td><span class="desc" data-bs-toggle="tooltip" data-bs-placement="top" title="RAW: ${escapeHtml(r.rawDescription)}">${r.description}</span></td>
       <td>${r.bucket}</td>
       <td class="text-end">${fmtCurrency(r.amount)}</td>
     </tr>
   `).join("");
     TABLE = new DataTable('#txTable', {
-        paging: true,
-        pageLength: 25,
-        lengthMenu: [25, 50, 100],
-        order: [[3, 'desc']],
-        searching: true,
-        info: true,
-        responsive: true
+        paging: true, pageLength: 25, lengthMenu: [25, 50, 100],
+        order: [[3, 'desc']], searching: true, info: true, responsive: true
     });
+    [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].forEach(el => new bootstrap.Tooltip(el));
 }
 
-// Filters
+// Filters UI + badges
 function populateCategoryFilter(rows) {
     const uniq = [...new Set(rows.map(r => r.bucket))].sort();
     const sel = $("#categoryFilter");
     sel.innerHTML = `<option value="">All</option>` + uniq.map(c => `<option value="${c}">${c}</option>`).join("");
-    // Keep dropdown in sync with tracked value
-    sel.value = CURRENT_BUCKET_FILTER || "";
+    if (CURRENT_BUCKET_FILTER && uniq.includes(CURRENT_BUCKET_FILTER)) sel.value = CURRENT_BUCKET_FILTER; else if (!CURRENT_BUCKET_FILTER) sel.value = "";
 }
 
 function populateMerchantFilter(rows, selectedBucket, desired = "") {
@@ -375,35 +523,123 @@ function populateMerchantFilter(rows, selectedBucket, desired = "") {
     CURRENT_MERCHANT_FILTER = sel.value;
 }
 
-function applyFilters() {
+function renderActiveFilters() {
+    const wrap = document.getElementById("activeFilters");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    const cat = CURRENT_BUCKET_FILTER;
+    const mer = CURRENT_MERCHANT_FILTER;
+    if (!cat && !mer) return;
+    if (cat) {
+        const span = document.createElement("span");
+        span.className = "filter-badge";
+        span.innerHTML = `<i class="bi bi-ui-checks-grid me-1"></i> Category: ${escapeHtml(cat)} <button class="btn-clear">×</button>`;
+        span.querySelector(".btn-clear").addEventListener("click", () => {
+            CURRENT_BUCKET_FILTER = "";
+            const el = document.getElementById("categoryFilter");
+            if (el) el.value = "";
+            safeApplyFilters();
+        });
+        wrap.appendChild(span);
+    }
+    if (mer) {
+        const span = document.createElement("span");
+        span.className = "filter-badge";
+        span.innerHTML = `<i class="bi bi-shop me-1"></i> Merchant: ${escapeHtml(mer)} <button class="btn-clear">×</button>`;
+        span.querySelector(".btn-clear").addEventListener("click", () => {
+            CURRENT_MERCHANT_FILTER = "";
+            const el = document.getElementById("merchantFilter");
+            if (el) el.value = "";
+            safeApplyFilters();
+        });
+        wrap.appendChild(span);
+    }
+}
+
+function updateHeaderFilterHints() {
+    const cat = CURRENT_BUCKET_FILTER || "";
+    const mer = CURRENT_MERCHANT_FILTER || "";
+    const t = document.getElementById("hdrTimeFilter");
+    const c = document.getElementById("hdrCatFilter");
+    const m = document.getElementById("hdrMerFilter");
+    const parts = [];
+    if (cat) parts.push(`Category: ${escapeHtml(cat)}`);
+    if (mer) parts.push(`Merchant: ${escapeHtml(mer)}`);
+    const text = parts.join(" • ");
+    if (t) t.innerHTML = text;
+    if (c) c.innerHTML = text;
+    if (m) m.innerHTML = text;
+}
+
+function updateFilterSummary() {
+    const from = document.getElementById("fromDate")?.value || "";
+    const to = document.getElementById("toDate")?.value || "";
+    const cat = CURRENT_BUCKET_FILTER || "";
+    const mer = CURRENT_MERCHANT_FILTER || "";
+    const upd = (id, val) => {
+        const el = document.querySelector(id + " .val");
+        if (el) el.textContent = val || "All";
+    };
+    upd("#chipDate", (from || to) ? `${from || "…"} → ${to || "…"} ` : "All");
+    upd("#chipCategory", cat || "All");
+    upd("#chipMerchant", mer || "All");
+}
+
+// Apply filters
+function __applyFiltersCore() {
     const from = parseDate($("#fromDate").value);
     const to = parseDate($("#toDate").value);
     const bucket = $("#categoryFilter").value;
-    const merchantBefore = $("#merchantFilter").value;
+    const merch = $("#merchantFilter").value;
 
-    // Sync tracked vars from dropdowns before we rebuild options
     CURRENT_BUCKET_FILTER = bucket;
-    CURRENT_MERCHANT_FILTER = merchantBefore;
+    CURRENT_MERCHANT_FILTER = merch;
 
-    // refresh merchant list while preserving selection
+    populateCategoryFilter(ROWS);
     populateMerchantFilter(ROWS, CURRENT_BUCKET_FILTER, CURRENT_MERCHANT_FILTER);
-    populateCategoryFilter(ROWS); // reassert dropdown matches tracked (no change in options count expected)
-
-    const merchant = $("#merchantFilter").value;
 
     const filtered = ROWS.filter(r => {
         if (from && r.date < from) return false;
         if (to && r.date > to) return false;
         if (CURRENT_BUCKET_FILTER && r.bucket !== CURRENT_BUCKET_FILTER) return false;
-        if (merchant && r.description !== merchant) return false;
+        if (CURRENT_MERCHANT_FILTER && r.description !== CURRENT_MERCHANT_FILTER) return false;
         return true;
     });
-
-    setKPIs(filtered);
-    renderCharts(filtered);
+    const __splitF = splitRefundAware(filtered);
+    setKPIs(__splitF.rowsForKPIs);
+    renderCharts(__splitF.rowsForGraphs);
     renderTable(filtered);
+    renderActiveFilters();
+    updateHeaderFilterHints();
+    updateFilterSummary();
 }
 
+function applyFilters() {
+    return __applyFiltersCore();
+}
+
+function clearDateFilters() {
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+    if (fromEl) fromEl.value = "";
+    if (toEl) toEl.value = "";
+    safeApplyFilters();
+}
+
+function safeApplyFilters() {
+    if (__FILTER_APPLYING) return;
+    try {
+        __FILTER_APPLYING = true;
+        return __applyFiltersCore();
+    } catch (e) {
+        console.error("applyFilters error:", e);
+        alert("Filter error: " + (e && e.message ? e.message : e));
+    } finally {
+        __FILTER_APPLYING = false;
+    }
+}
+
+// Hydrate & CSV
 function hydrateUI(rows) {
     ROWS = rows;
     populateCategoryFilter(ROWS);
@@ -418,15 +654,19 @@ function hydrateUI(rows) {
         $("#toDate").value = "";
     }
 
-    setKPIs(ROWS);
-    renderCharts(ROWS);
+    const __split = splitRefundAware(ROWS);
+    setKPIs(__split.rowsForKPIs);
+    renderCharts(__split.rowsForGraphs);
     renderTable(ROWS);
+    renderActiveFilters();
+    updateHeaderFilterHints();
+    updateFilterSummary();
 }
 
-// File handling
 function handleCSVFile(file) {
     Papa.parse(file, {
-        header: true, skipEmptyLines: "greedy", complete: (res) => {
+        header: true, skipEmptyLines: "greedy",
+        complete: (res) => {
             if (!res || !res.data || !res.data.length) {
                 alert("No rows found in the CSV.");
                 return;
@@ -438,44 +678,61 @@ function handleCSVFile(file) {
                 return;
             }
             hydrateUI(cleaned);
-        }, error: (err) => alert("Failed to parse CSV: " + err.message),
+        },
+        error: (err) => alert("Failed to parse CSV: " + err.message),
     });
 }
 
-// Events
-window.addEventListener("DOMContentLoaded", () => {
-    const fileEl = document.getElementById("fileInput");
-    if (fileEl) fileEl.addEventListener("change", (e) => {
-        const f = e.target.files?.[0];
-        if (f) handleCSVFile(f);
-    });
+// DOM ready
+function lockChartHeights() {
+    const t = document.getElementById("timeChart");
+    if (t) {
+        t.height = 210;
+        t.style.height = "210px";
+    }
+    const c = document.getElementById("categoryChart");
+    if (c) {
+        c.height = 240;
+        c.style.height = "240px";
+    }
+}
 
-    // Top-N dropdown
+window.addEventListener("DOMContentLoaded", () => {
+    lockChartHeights();
+    const fileEl = document.getElementById("fileInput");
+    if (fileEl) {
+        fileEl.addEventListener("change", (e) => {
+            const f = (e.target && e.target.files) ? e.target.files[0] : null;
+            if (f) handleCSVFile(f);
+        });
+    }
+    // Merchant count dropdown
     const dd = document.getElementById("topNMerchantsDropdown");
     document.querySelectorAll(".merchant-count").forEach((el) => {
         el.addEventListener("click", (e) => {
-            const val = parseInt(e.target.getAttribute("data-value"), 10);
+            const target = e.currentTarget || e.target;
+            const dv = target.getAttribute("data-value");
+            const val = parseInt(dv, 10);
             if (!isNaN(val)) {
                 TOP_N = Math.max(5, Math.min(50, val));
                 if (dd) dd.textContent = "Show " + TOP_N;
-                applyFilters();
+                safeApplyFilters();
             }
         });
     });
-
-    // Auto-apply on filter changes and keep tracked vars in sync
-    const catSel = document.getElementById("categoryFilter");
-    const merchSel = document.getElementById("merchantFilter");
-    const fromEl = document.getElementById("fromDate");
-    const toEl = document.getElementById("toDate");
-    if (catSel) catSel.addEventListener("change", () => {
-        CURRENT_BUCKET_FILTER = catSel.value;
-        applyFilters();
+    // Top-level filters
+    ["categoryFilter", "merchantFilter", "fromDate", "toDate"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", safeApplyFilters);
     });
-    if (merchSel) merchSel.addEventListener("change", () => {
-        CURRENT_MERCHANT_FILTER = merchSel.value;
-        applyFilters();
+    // Clear date button(s)
+    const cdb = document.getElementById("btnClearDate");
+    if (cdb) cdb.addEventListener("click", clearDateFilters);
+    document.addEventListener("click", (e) => {
+        const t = e.target;
+        if (t && t.matches('[data-clear="date"]')) {
+            e.preventDefault();
+            clearDateFilters();
+        }
     });
-    if (fromEl) fromEl.addEventListener("change", applyFilters);
-    if (toEl) toEl.addEventListener("change", applyFilters);
 });

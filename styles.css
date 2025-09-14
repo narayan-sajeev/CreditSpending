@@ -32,10 +32,9 @@
 html, body {
     background: var(--bg);
     color: var(--text);
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
 
-/* Background */
 .bg-gradient {
     position: fixed;
     inset: 0;
@@ -44,7 +43,6 @@ html, body {
     background: radial-gradient(1200px 800px at 10% -10%, rgba(124, 101, 255, .25), transparent 60%),
     radial-gradient(900px 700px at 90% 10%, rgba(0, 212, 255, .2), transparent 60%),
     radial-gradient(700px 600px at 50% 110%, rgba(124, 101, 255, .18), transparent 60%);
-    filter: blur(0px);
 }
 
 :root[data-bs-theme="light"] .bg-gradient {
@@ -75,6 +73,14 @@ html, body {
 
 :root[data-bs-theme="light"] .glass-nav {
     background: linear-gradient(to bottom, rgba(255, 255, 255, .9), rgba(255, 255, 255, .7));
+}
+
+.navbar .navbar-brand, .navbar .navbar-brand .fw-extrabold {
+    color: var(--text) !important;
+}
+
+.navbar .navbar-brand:hover {
+    color: var(--text) !important;
 }
 
 .brand-mark {
@@ -299,6 +305,7 @@ html, body {
 
 #timeChart, #categoryChart, #merchantChart {
     width: 100%;
+    max-height: 520px;
 }
 
 .shadow-xxl {
@@ -312,3 +319,60 @@ html, body {
 :root[data-bs-theme="light"] .text-secondary-emphasis {
     color: #4b5563 !important;
 }
+
+/* Filter badges */
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .65rem;
+    border-radius: 999px;
+    font-size: .8rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b0d10;
+    font-weight: 700;
+    box-shadow: var(--shadow);
+    margin-right: .5rem;
+    margin-top: .25rem;
+}
+
+.filter-badge .btn-clear {
+    background: rgba(255, 255, 255, .9);
+    border: none;
+    border-radius: 999px;
+    padding: 0 .45rem;
+    font-size: .85rem;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+:root[data-bs-theme="light"] .filter-badge {
+    color: #111418;
+}
+
+#kpiTopMerchant {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.2;
+}
+
+/* Prevent any height/size transition "grow" on update */
+#timeChart, #categoryChart, #merchantChart, canvas.chartjs-render-monitor {
+    transition: none !important;
+}
+
+
+/* Lock compact chart heights (half size) */
+#timeChart {
+    height: 210px !important;
+    max-height: 210px !important;
+    min-height: 210px !important;
+}
+
+#categoryChart {
+    height: 240px !important;
+    max-height: 240px !important;
+    min-height: 240px !important;
+}
+
